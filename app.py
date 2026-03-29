@@ -751,6 +751,23 @@ elif page == "SOP Portfolio":
     st.markdown("# SOP Portfolio")
     st.markdown(f"<p style='color:{TEXT_MUTED}'>All graded SOPs with detailed breakdowns</p>", unsafe_allow_html=True)
 
+    st.markdown(
+        f"<div style='background:{CARD_BG};border:1px solid {CARD_BORDER};"
+        f"border-radius:12px;padding:16px 20px;margin-bottom:20px'>"
+        f"<b style='color:{TEXT_WHITE}'>How to read the scores</b><br>"
+        f"<span style='color:{TEXT_MUTED};font-size:0.9rem'>"
+        f"<b style='color:{TEXT_WHITE}'>Grade (/10)</b> = how ready this SOP is for the team to adopt. "
+        f"Scores clarity, completeness, reproducibility, automation potential, and documentation quality. "
+        f"A high grade means anyone could pick it up and run it.<br><br>"
+        f"<b style='color:{TEXT_WHITE}'>Hours/year</b> = how valuable the automation is if the team adopts it. "
+        f"Driven by time saved per use, frequency, and team size. "
+        f"A high number means big impact at scale.<br><br>"
+        f"The sweet spot is both high — a well-documented SOP that saves a lot of time. "
+        f"If an SOP has high hours but a low grade, the opportunity is to improve the documentation so more people can use it."
+        f"</span></div>",
+        unsafe_allow_html=True,
+    )
+
     sops = load_all_sops()
 
     if not sops:
