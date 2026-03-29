@@ -13,7 +13,6 @@ from usage_scanner import scan_claude_code_logs, compute_actuals
 from team import ROSTER, TEAM_NAMES, LOCATIONS, load_usage_logs, log_usage, delete_usage_log, get_team_metrics
 from sheet_reader import fetch_all_remote_usage, fetch_sop_submissions, SOP_FORM_URL
 
-GOOGLE_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLScd6SMZOD-UPYY3qHtv-5KJOSooPQsstpJnuxMacv6DAxymqA/viewform"
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1m-o1j571k60W5lJeUtGhhhZqdtHOCrdQN1csVeRlCK0/edit"
 
 
@@ -328,7 +327,7 @@ with st.sidebar:
     )
     st.divider()
 
-    page = st.radio("Navigate", ["Dashboard", "Estimates vs. Actuals", "Log Team Usage", "Grade an SOP", "SOP Portfolio"], label_visibility="collapsed")
+    page = st.radio("Navigate", ["Dashboard", "Estimates vs. Actuals", "Submit an SOP", "SOP Portfolio"], label_visibility="collapsed")
 
     st.divider()
     sops = load_all_sops()
@@ -613,7 +612,7 @@ elif page == "Estimates vs. Actuals":
         c2.metric("From Team Reports", f"{team_metrics['total_hours_saved']:.1f} hrs")
         c3.metric("Total Verified", f"{combined_actual_hrs:.1f} hrs")
     else:
-        st.info(f"No team usage logged yet. Share the [Google Form]({GOOGLE_FORM_URL}) with your team or go to **Log Team Usage**.")
+        st.info(f"No team usage logged yet. Usage is auto-tracked via CLAUDE.md. Go to **Submit an SOP** to add automations.")
 
     st.markdown("---")
     st.markdown("### How Actuals Are Calculated")
@@ -628,134 +627,30 @@ elif page == "Estimates vs. Actuals":
 
 
 # ── LOG TEAM USAGE ──
-elif page == "Log Team Usage":
-    st.markdown("# Log Team Usage")
+elif page == "Submit an SOP":
+    st.markdown("# Submit an SOP")
     st.markdown(
         f"<p style='color:{TEXT_MUTED};font-size:1.1rem'>"
-        "Quick-log when you or a teammate saves time with an AI automation"
+        "Add your automation to the leaderboard. Two ways to submit:"
         "</p>",
         unsafe_allow_html=True,
     )
 
     st.markdown(
-        f"<div style='background:linear-gradient(135deg,#1C1C1C,#242424);border:1px solid #2E2E2E;"
-        f"border-radius:12px;padding:16px 20px;margin-bottom:20px'>"
-        f"<b style='color:{TEXT_WHITE}'>Share with your team:</b> "
-        f"<a href='{GOOGLE_FORM_URL}' style='color:{ACCENT_BLUE}'>Google Form</a> — "
-        f"anyone can log usage without opening this dashboard. "
-        f"Responses auto-sync here. "
-        f"<a href='{GOOGLE_SHEET_URL}' style='color:{ACCENT_BLUE}'>View raw data</a>"
+        f"<div style='background:{CARD_BG};border:1px solid {CARD_BORDER};border-left:4px solid {DOORDASH_RED};"
+        f"border-radius:12px;padding:20px 24px;margin-bottom:24px'>"
+        f"<div style='font-size:1.2rem;font-weight:700;color:{TEXT_WHITE};margin-bottom:8px'>Option 1: Google Form (recommended)</div>"
+        f"<p style='color:{TEXT_MUTED};margin-bottom:12px'>Takes 2 minutes. Anyone on the team can submit. Auto-populates the leaderboard.</p>"
+        f"<a href='{SOP_FORM_URL}' style='color:{DOORDASH_RED};font-weight:700;font-size:1.1rem'>Open the SOP Submission Form →</a>"
         f"</div>",
         unsafe_allow_html=True,
     )
 
-    sops = load_all_sops()
-    sop_lookup = {s["name"]: s for s in sops}
-
-    existing_logs = load_usage_logs()
-    logged_sop_names = sorted(set(l["sop_name"] for l in existing_logs))
-    graded_sop_names = [s["name"] for s in sops]
-    all_sop_names = list(dict.fromkeys(graded_sop_names + logged_sop_names))
-    sop_options = all_sop_names + ["Other (type below)"]
-
-    with st.form("log_usage_form", clear_on_submit=True):
-        form_cols = st.columns(2)
-        person = form_cols[0].selectbox("Who saved time?", TEAM_NAMES)
-        sop_choice = form_cols[1].selectbox("Which SOP / automation?", sop_options)
-
-        if sop_choice == "Other (type below)":
-            custom_sop = st.text_input("SOP name", placeholder="e.g., Weekly QBR prep")
-        else:
-            custom_sop = ""
-
-        matched_sop = sop_lookup.get(sop_choice)
-        default_minutes = matched_sop["time_before_minutes"] - matched_sop["time_after_minutes"] if matched_sop else 30
-        hint = f"(pre-filled from graded SOP: {matched_sop['time_before_minutes']}min before → {matched_sop['time_after_minutes']}min after)" if matched_sop else ""
-
-        time_cols = st.columns(3)
-        minutes_saved = time_cols[0].number_input("Minutes saved", min_value=1, max_value=480, value=max(1, default_minutes))
-        notes = time_cols[1].text_input("Notes (optional)", placeholder="e.g., Prepped 3 merchant briefs")
-        if hint:
-            time_cols[2].markdown(f"<br><span style='color:{TEXT_MUTED};font-size:0.75rem'>{hint}</span>", unsafe_allow_html=True)
-
-        submitted = st.form_submit_button("Log It", type="primary")
-        if submitted:
-            final_sop = custom_sop if sop_choice == "Other (type below)" else sop_choice
-            if final_sop:
-                entry = log_usage(person, final_sop, minutes_saved, notes)
-                st.success(f"Logged **{minutes_saved} min** saved by **{person}** on **{final_sop}**")
-            else:
-                st.error("Please enter an SOP name.")
-
-    # ── Team Scoreboard ──
-    st.markdown("---")
-    usage_logs = load_usage_logs()
-    remote_logs = fetch_all_remote_usage()
-    all_usage = usage_logs + remote_logs
-    team_metrics = get_team_metrics(all_usage)
-
-    st.markdown("### Team Scoreboard")
-
-    if all_usage:
-        sb1, sb2, sb3, sb4 = st.columns(4)
-        sb1.metric("Total Entries", team_metrics["total_logs"])
-        sb2.metric("People Active", f"{team_metrics['unique_people']}/{team_metrics['total_roster']}")
-        sb3.metric("Adoption Rate", f"{team_metrics['adoption_pct']}%")
-        sb4.metric("Total Hours Saved", f"{team_metrics['total_hours_saved']:.1f}")
-
-        sb_left, sb_right = st.columns(2)
-        with sb_left:
-            st.markdown("#### Top Time Savers")
-            for rank, (person, mins) in enumerate(team_metrics["top_savers"][:10], 1):
-                hrs = mins / 60
-                st.markdown(f"**{rank}.** {person} — {hrs:.1f} hrs")
-
-        with sb_right:
-            st.markdown("#### Most Used SOPs")
-            for rank, (sop, mins) in enumerate(team_metrics["top_sops"][:10], 1):
-                hrs = mins / 60
-                st.markdown(f"**{rank}.** {sop} — {hrs:.1f} hrs")
-
-        st.markdown("---")
-        st.markdown("### Recent Entries")
-        for entry in reversed(usage_logs[-20:]):
-            ts = entry["timestamp"][:16].replace("T", " ")
-            note_text = f" — *{entry['notes']}*" if entry.get("notes") else ""
-            col_entry, col_del = st.columns([10, 1])
-            with col_entry:
-                st.markdown(
-                    f"**{entry['person']}** saved **{entry['minutes_saved']} min** "
-                    f"on *{entry['sop_name']}* ({ts}){note_text}"
-                )
-            with col_del:
-                if st.button("✕", key=f"del_log_{entry['id']}"):
-                    delete_usage_log(entry["id"])
-                    st.rerun()
-    else:
-        st.info(f"No usage logged yet. Use the form above or share the [Google Form]({GOOGLE_FORM_URL}) with your team.")
-
-    st.markdown("---")
-    st.markdown(
-        f"<p style='color:{TEXT_MUTED}'>"
-        f"<b>{len(ROSTER)}</b> team members on the roster. "
-        f"Not seeing someone? Edit <code>team.py</code> to update the roster."
-        "</p>",
-        unsafe_allow_html=True,
-    )
-
-
-# ── GRADE AN SOP ──
-elif page == "Grade an SOP":
-    st.markdown("# Grade an SOP")
-    st.markdown(f"<p style='color:{TEXT_MUTED}'>Paste your SOP text below, then grade it with Claude or manually.</p>", unsafe_allow_html=True)
-
     st.markdown(
         f"<div style='background:{CARD_BG};border:1px solid {CARD_BORDER};"
-        f"border-radius:12px;padding:16px 20px;margin-bottom:20px'>"
-        f"<b style='color:{TEXT_WHITE}'>Want to skip this form?</b> "
-        f"Anyone on the team can self-submit an SOP via "
-        f"<a href='{SOP_FORM_URL}' style='color:{DOORDASH_RED}'>this Google Form</a> — "
-        f"it auto-populates the leaderboard. No setup required."
+        f"border-radius:12px;padding:20px 24px;margin-bottom:24px'>"
+        f"<div style='font-size:1.2rem;font-weight:700;color:{TEXT_WHITE};margin-bottom:8px'>Option 2: Paste & Grade (advanced)</div>"
+        f"<p style='color:{TEXT_MUTED}'>Paste the full SOP text below for a detailed grade with Claude AI or manual scoring.</p>"
         f"</div>",
         unsafe_allow_html=True,
     )
