@@ -114,13 +114,6 @@ st.markdown("""
         background: #1C1C1C;
         border: 1px solid #2E2E2E;
         border-radius: 12px;
-        border-left: 4px solid #FF3008;
-    }
-    div[data-testid="stExpander"] summary {
-        padding-left: 12px;
-    }
-    div[data-testid="stExpander"] summary span[data-testid="stMarkdownContainer"] p {
-        padding-left: 8px;
     }
 
     /* Buttons */
@@ -761,19 +754,38 @@ elif page == "SOP Portfolio":
     sops = load_all_sops()
 
     if not sops:
-        st.info("No SOPs graded yet. Go to **Grade an SOP** to add your first.")
+        st.info("No SOPs graded yet. Go to **Submit an SOP** to add your first.")
     else:
         for sop in sorted(sops, key=lambda s: s["annual_team_savings_hrs"], reverse=True):
-            builder_tag = f" — Built by {sop['built_by']}" if sop.get("built_by") else ""
-            with st.expander(f"**{sop['name']}**{builder_tag} — Grade: {sop['overall_grade']}/10 — {sop['annual_team_savings_hrs']:,.0f} hrs/year", expanded=False):
-                st.markdown(f"*{sop.get('summary', 'No summary')}*")
+            builder = sop.get("built_by", "")
+            grade_color_val = grade_color(sop["overall_grade"])
 
+            builder_html = f"<span style='color:{TEXT_MUTED};font-size:0.9rem'> — {builder}</span>" if builder else ""
+            summary_text = sop.get("summary", "")
+
+            st.markdown(
+                f"<div style='background:{CARD_BG};border:1px solid {CARD_BORDER};border-left:4px solid {DOORDASH_RED};"
+                f"border-radius:12px;padding:20px 24px;margin-bottom:8px'>"
+                f"<div style='display:flex;justify-content:space-between;align-items:center'>"
+                f"<div>"
+                f"<span style='color:{TEXT_WHITE};font-size:1.15rem;font-weight:700'>{sop['name']}</span>"
+                f"{builder_html}"
+                f"</div>"
+                f"<div style='text-align:right'>"
+                f"<span style='color:{grade_color_val};font-size:1.5rem;font-weight:800'>{sop['overall_grade']}</span>"
+                f"<span style='color:{TEXT_MUTED};font-size:0.8rem'>/10</span>"
+                f"<span style='color:{TEXT_MUTED};font-size:0.85rem;margin-left:16px'>{sop['annual_team_savings_hrs']:,.0f} hrs/year</span>"
+                f"</div></div>"
+                f"<p style='color:{TEXT_MUTED};font-size:0.85rem;margin-top:6px;margin-bottom:0'>{summary_text}</p>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
+            if st.checkbox("Show details", key=f"details_{sop['id']}", value=False):
                 top_row = st.columns(5)
                 for i, (k, v) in enumerate(sop["scores"].items()):
                     with top_row[i]:
                         render_grade_badge(v, k.replace("_", " ").title())
-
-                st.markdown("---")
 
                 val_cols = st.columns(4)
                 val_cols[0].metric("Before", f"{sop['time_before_minutes']} min")
@@ -786,15 +798,11 @@ elif page == "SOP Portfolio":
                 sav_cols[1].metric("Weekly (team)", f"{sop['weekly_team_savings_hrs']} hrs")
                 sav_cols[2].metric("Annual (team)", f"{sop['annual_team_savings_hrs']:,.0f} hrs")
 
-                chart_left, chart_right = st.columns(2)
-                with chart_left:
-                    st.plotly_chart(render_radar_chart(sop["scores"]), use_container_width=True)
+                st.plotly_chart(render_radar_chart(sop["scores"]), use_container_width=True)
 
                 if sop.get("improvements"):
                     st.markdown("#### Improvements")
                     for imp in sop["improvements"]:
                         st.markdown(f"- {imp}")
 
-                if st.button(f"Delete", key=f"del_{sop['id']}"):
-                    delete_sop(sop["id"])
-                    st.rerun()
+                st.markdown("---")
